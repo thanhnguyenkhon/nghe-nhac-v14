@@ -1,0 +1,548 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>PureTube Pro - Full Features Realtime</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+
+    <!-- Firebase SDK Compat -->
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        yt: { red: '#FF0000', darkBg: '#0F0F0F', darkCard: '#1F1F1F', darkHover: '#383838' }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body { font-family: 'Roboto', sans-serif; -webkit-tap-highlight-color: transparent; }
+        .hide-scrollbar::-webkit-scrollbar { display: none; }
+        .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        @keyframes rotate-disc {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+        .animate-disc { animation: rotate-disc 10s linear infinite; }
+        .paused-disc { animation-play-state: paused; }
+        .shorts-container { scroll-snap-type: y mandatory; }
+        .shorts-item { scroll-snap-align: start; }
+    </style>
+</head>
+<body class="bg-gray-100 text-gray-900 dark:bg-yt-darkBg dark:text-white min-h-screen pb-28">
+
+    <!-- Header Top Bar -->
+    <header class="sticky top-0 z-40 bg-white dark:bg-yt-darkBg border-b border-gray-200 dark:border-gray-800 px-4 py-2.5 flex items-center justify-between">
+        <div class="flex items-center space-x-2">
+            <i class="fa-brands fa-youtube text-yt-red text-2xl"></i>
+            <span class="font-bold text-lg tracking-tighter flex items-center gap-1">
+                PureTube <span class="text-xs bg-yt-red text-white px-1.5 py-0.5 rounded font-normal">PRO</span>
+            </span>
+        </div>
+        
+        <div class="flex items-center space-x-3">
+            <button onclick="toggleTheme()" class="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-yt-darkHover">
+                <i class="fa-solid fa-moon text-lg dark:hidden"></i>
+                <i class="fa-solid fa-sun text-lg hidden dark:block text-yellow-400"></i>
+            </button>
+            <button onclick="openModal('authModal')" class="flex items-center space-x-2 bg-gray-200 dark:bg-yt-darkCard px-3 py-1.5 rounded-full text-xs font-medium">
+                <i class="fa-solid fa-user-circle text-base text-yt-red"></i>
+                <span id="userDisplayName">Đăng Nhập</span>
+            </button>
+        </div>
+    </header>
+
+    <!-- Content Tabs -->
+    <div class="sticky top-[53px] z-30 bg-white/95 dark:bg-yt-darkBg/95 backdrop-blur px-3 py-2 border-b border-gray-200 dark:border-gray-800">
+        <div class="flex space-x-2 overflow-x-auto hide-scrollbar max-w-md mx-auto">
+            <button onclick="switchTab('feed')" id="tab-feed" class="px-4 py-1.5 rounded-full text-xs font-semibold bg-black text-white dark:bg-white dark:text-black">Trang chủ</button>
+            <button onclick="switchTab('shorts')" id="tab-shorts" class="px-4 py-1.5 rounded-full text-xs font-semibold bg-gray-200 text-gray-800 dark:bg-yt-darkCard dark:text-gray-300">Shorts</button>
+            <button onclick="switchTab('music')" id="tab-music" class="px-4 py-1.5 rounded-full text-xs font-semibold bg-gray-200 text-gray-800 dark:bg-yt-darkCard dark:text-gray-300">Âm Nhạc (MP3)</button>
+            <button onclick="switchTab('offline')" id="tab-offline" class="px-4 py-1.5 rounded-full text-xs font-semibold bg-gray-200 text-gray-800 dark:bg-yt-darkCard dark:text-gray-300"><i class="fa-solid fa-download mr-1"></i>Offline</button>
+        </div>
+    </div>
+
+    <!-- Main Section -->
+    <main class="max-w-md mx-auto p-3 space-y-4">
+        <!-- Status Badge -->
+        <div id="statusBadge" class="text-center text-[11px] text-green-600 dark:text-green-400 font-semibold py-1 bg-green-50 dark:bg-green-950/30 rounded-lg">
+            <i class="fa-solid fa-cloud-check mr-1"></i> Đã kết nối Firebase Cloud (Dự án: yt-gia)
+        </div>
+
+        <!-- Feed Container -->
+        <div id="mediaFeedList" class="space-y-4"></div>
+
+        <!-- Shorts Container (Màn hình Shorts lướt dọc) -->
+        <div id="shortsContainer" class="hidden space-y-4 shorts-container overflow-y-auto max-h-[75vh]"></div>
+
+        <!-- Offline Container -->
+        <div id="offlineContainer" class="hidden space-y-4">
+            <div class="text-center py-6 text-gray-500 text-xs">
+                <i class="fa-solid fa-box-archive text-3xl mb-2"></i>
+                <p>Danh sách bài hát & video đã tải về máy để nghe khi không có mạng.</p>
+            </div>
+            <div id="offlineList" class="space-y-3"></div>
+        </div>
+    </main>
+
+    <!-- Nút Đăng Bài Floating -->
+    <button onclick="openModal('uploadModal')" class="fixed right-4 bottom-28 z-40 bg-yt-red text-white w-14 h-14 rounded-full shadow-lg flex items-center justify-center text-xl active:scale-95">
+        <i class="fa-solid fa-plus"></i>
+    </button>
+
+    <!-- Trình Phát Nhạc Chuẩn NCT / Zing MP3 -->
+    <div id="playerBar" class="hidden fixed bottom-14 left-0 right-0 z-40 bg-gray-900 text-white border-t border-gray-800 p-3 shadow-2xl">
+        <div class="max-w-md mx-auto flex flex-col space-y-2">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center space-x-3 overflow-hidden">
+                    <div id="playerDisc" class="w-10 h-10 rounded-full bg-yt-red flex items-center justify-center animate-disc paused-disc flex-shrink-0 border-2 border-white/20">
+                        <i class="fa-solid fa-music text-white text-sm"></i>
+                    </div>
+                    <div class="truncate">
+                        <h4 id="playerTitle" class="text-xs font-bold truncate">Tên Bài Hát</h4>
+                        <p id="playerAuthor" class="text-[10px] text-gray-400 truncate">Ca sĩ / Kênh</p>
+                    </div>
+                </div>
+                <button onclick="closePlayer()" class="text-gray-400 hover:text-white p-1 text-sm"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+
+            <!-- Nút Điều Khiển Kiểu NCT: [Trước] - [Play/Pause] - [Sau] -->
+            <div class="flex items-center justify-center space-x-6 pt-1">
+                <button onclick="playPrevTrack()" class="text-gray-300 hover:text-yt-red text-lg active:scale-90 transition">
+                    <i class="fa-solid fa-backward-step"></i>
+                </button>
+                <button onclick="togglePlayPause()" class="w-9 h-9 bg-yt-red rounded-full flex items-center justify-center text-white text-sm shadow-md active:scale-90 transition">
+                    <i id="playPauseIcon" class="fa-solid fa-pause"></i>
+                </button>
+                <button onclick="playNextTrack()" class="text-gray-300 hover:text-yt-red text-lg active:scale-90 transition">
+                    <i class="fa-solid fa-forward-step"></i>
+                </button>
+            </div>
+            <audio id="globalAudio" class="hidden"></audio>
+        </div>
+    </div>
+
+    <!-- Bottom Navigation -->
+    <nav class="fixed bottom-0 left-0 right-0 z-40 bg-white dark:bg-yt-darkBg border-t border-gray-200 dark:border-gray-800 flex justify-around py-2 text-xs">
+        <button onclick="switchTab('feed')" class="flex flex-col items-center text-yt-red">
+            <i class="fa-solid fa-house text-lg"></i>
+            <span class="text-[10px] mt-0.5">Trang chủ</span>
+        </button>
+        <button onclick="switchTab('shorts')" class="flex flex-col items-center text-gray-400">
+            <i class="fa-solid fa-bolt text-lg"></i>
+            <span class="text-[10px] mt-0.5">Shorts</span>
+        </button>
+        <button onclick="openModal('uploadModal')" class="flex flex-col items-center text-gray-400">
+            <i class="fa-regular fa-square-plus text-xl"></i>
+            <span class="text-[10px] mt-0.5">Đăng bài</span>
+        </button>
+        <button onclick="switchTab('offline')" class="flex flex-col items-center text-gray-400">
+            <i class="fa-solid fa-folder-closed text-lg"></i>
+            <span class="text-[10px] mt-0.5">Thư viện</span>
+        </button>
+    </nav>
+
+    <!-- Modal Đăng Nhập -->
+    <div id="authModal" class="hidden fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4">
+        <div class="bg-white dark:bg-yt-darkCard w-full max-w-sm rounded-2xl p-6 relative shadow-xl">
+            <button onclick="closeModal('authModal')" class="absolute top-4 right-4 text-gray-400"><i class="fa-solid fa-xmark"></i></button>
+            <h3 class="text-lg font-bold mb-4">Tài Khoản Gmail / Kênh</h3>
+            <form onsubmit="handleLogin(event)" class="space-y-4">
+                <input type="email" id="loginEmail" required placeholder="Gmail của bạn..." class="w-full px-3 py-2 rounded-lg bg-gray-100 dark:bg-yt-darkBg border border-gray-300 dark:border-gray-700 text-sm">
+                <input type="text" id="loginChannelName" required placeholder="Tên Kênh hiển thị..." class="w-full px-3 py-2 rounded-lg bg-gray-100 dark:bg-yt-darkBg border border-gray-300 dark:border-gray-700 text-sm">
+                <button type="submit" class="w-full bg-yt-red text-white py-2.5 rounded-lg font-semibold text-sm">Lưu Thông Tin</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal Đăng Tệp MP3 / MP4 / Shorts / Link YouTube -->
+    <div id="uploadModal" class="hidden fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4">
+        <div class="bg-white dark:bg-yt-darkCard w-full max-w-sm rounded-2xl p-6 relative shadow-xl">
+            <button onclick="closeModal('uploadModal')" class="absolute top-4 right-4 text-gray-400"><i class="fa-solid fa-xmark"></i></button>
+            <h3 class="text-lg font-bold mb-4">Đăng Nội Dung Mới</h3>
+            <form onsubmit="handleUpload(event)" class="space-y-4">
+                <input type="text" id="uploadTitle" required placeholder="Tiêu đề video / bài hát..." class="w-full px-3 py-2 rounded-lg bg-gray-100 dark:bg-yt-darkBg border border-gray-300 dark:border-gray-700 text-sm">
+                
+                <div>
+                    <label class="block text-xs font-semibold mb-1">Loại Nguồn</label>
+                    <select id="uploadType" onchange="toggleInputs()" class="w-full px-3 py-2 rounded-lg bg-gray-100 dark:bg-yt-darkBg border border-gray-300 dark:border-gray-700 text-sm">
+                        <option value="file">Tệp từ máy (MP3, Video thường)</option>
+                        <option value="shorts">🎥 Video ngắn (Shorts)</option>
+                        <option value="youtube">Link YouTube gốc</option>
+                    </select>
+                </div>
+
+                <div id="fileInputGroup">
+                    <input type="file" id="mediaFile" accept="audio/*,video/*" class="w-full text-xs text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-yt-red file:text-white">
+                </div>
+
+                <div id="ytInputGroup" class="hidden">
+                    <input type="url" id="ytUrl" placeholder="https://www.youtube.com/watch?v=..." class="w-full px-3 py-2 rounded-lg bg-gray-100 dark:bg-yt-darkBg border border-gray-300 dark:border-gray-700 text-sm">
+                </div>
+
+                <button type="submit" class="w-full bg-yt-red text-white py-2.5 rounded-lg font-semibold text-sm">Tải Lên Firebase</button>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        // --- 1. CẤU HÌNH FIREBASE ---
+        const firebaseConfig = {
+            apiKey: "AIzaSyCyBSLvL0N229s5My3FSqGk1uTH2sTP93k",
+            authDomain: "yt-gia.firebaseapp.com",
+            projectId: "yt-gia",
+            storageBucket: "yt-gia.firebasestorage.app",
+            messagingSenderId: "48695953199",
+            appId: "1:48695953199:web:bcb9fcaf85fd76337afccc",
+            measurementId: "G-GNDPQKHKTC"
+        };
+
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.firestore();
+
+        let currentUser = JSON.parse(localStorage.getItem('pt_user')) || { name: 'Người dùng A', email: 'usera@gmail.com' };
+        let mediaFeed = [];
+        let offlineItems = JSON.parse(localStorage.getItem('pt_offline')) || [];
+        let currentIndex = -1;
+        const globalAudio = document.getElementById('globalAudio');
+
+        document.addEventListener('DOMContentLoaded', () => {
+            document.getElementById('userDisplayName').innerText = currentUser.name;
+            
+            // Lắng nghe dữ liệu thời gian thực từ Cloud Firestore
+            db.collection("posts").orderBy("createdAt", "desc").onSnapshot((snapshot) => {
+                mediaFeed = [];
+                snapshot.forEach((doc) => {
+                    mediaFeed.push({ id: doc.id, ...doc.data() });
+                });
+                renderFeed(mediaFeed);
+            }, (error) => {
+                console.log("Cần bật Firestore Database Rules ở chế độ test mode:", error);
+            });
+        });
+
+        function toggleTheme() { document.documentElement.classList.toggle('dark'); }
+        function openModal(id) { document.getElementById(id).classList.remove('hidden'); }
+        function closeModal(id) { document.getElementById(id).classList.add('hidden'); }
+
+        function switchTab(tab) {
+            document.getElementById('mediaFeedList').classList.toggle('hidden', tab !== 'feed' && tab !== 'music');
+            document.getElementById('shortsContainer').classList.toggle('hidden', tab !== 'shorts');
+            document.getElementById('offlineContainer').classList.toggle('hidden', tab !== 'offline');
+
+            if (tab === 'music') {
+                renderFeed(mediaFeed.filter(i => i.type === 'audio'));
+            } else if (tab === 'feed') {
+                renderFeed(mediaFeed);
+            } else if (tab === 'shorts') {
+                renderShorts(mediaFeed.filter(i => i.type === 'shorts' || i.type === 'video' || i.type === 'youtube'));
+            } else if (tab === 'offline') {
+                renderOffline();
+            }
+        }
+
+        function handleLogin(e) {
+            e.preventDefault();
+            currentUser = {
+                name: document.getElementById('loginChannelName').value,
+                email: document.getElementById('loginEmail').value
+            };
+            localStorage.setItem('pt_user', JSON.stringify(currentUser));
+            document.getElementById('userDisplayName').innerText = currentUser.name;
+            closeModal('authModal');
+        }
+
+        function toggleInputs() {
+            const type = document.getElementById('uploadType').value;
+            document.getElementById('fileInputGroup').classList.toggle('hidden', type === 'youtube');
+            document.getElementById('ytInputGroup').classList.toggle('hidden', type !== 'youtube');
+        }
+
+        function handleUpload(e) {
+            e.preventDefault();
+            const title = document.getElementById('uploadTitle').value;
+            const type = document.getElementById('uploadType').value;
+
+            let newPost = {
+                title: title,
+                author: currentUser.name,
+                likes: 0,
+                timestamp: 'Vừa xong',
+                createdAt: Date.now()
+            };
+
+            if (type === 'youtube') {
+                const url = document.getElementById('ytUrl').value;
+                const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
+                const match = url.match(regExp);
+                newPost.type = 'youtube';
+                newPost.ytId = (match && match[2].length === 11) ? match[2] : '';
+                newPost.url = url;
+                saveToFirebase(newPost);
+            } else if (type === 'shorts') {
+                const file = document.getElementById('mediaFile').files[0];
+                if (!file) return alert('Vui lòng chọn tệp video ngắn!');
+                const reader = new FileReader();
+                reader.onload = function(evt) {
+                    newPost.type = 'shorts';
+                    newPost.url = evt.target.result;
+                    saveToFirebase(newPost);
+                };
+                reader.readAsDataURL(file);
+            } else {
+                const file = document.getElementById('mediaFile').files[0];
+                if (!file) return alert('Vui lòng chọn tệp!');
+                const reader = new FileReader();
+                reader.onload = function(evt) {
+                    newPost.type = file.type.startsWith('audio') ? 'audio' : 'video';
+                    newPost.url = evt.target.result;
+                    saveToFirebase(newPost);
+                };
+                reader.readAsDataURL(file);
+            }
+        }
+
+        function saveToFirebase(postData) {
+            db.collection("posts").add(postData).then(() => {
+                closeModal('uploadModal');
+                alert('Đã đăng thành công!');
+            }).catch(err => {
+                alert("Lỗi Firestore: Hãy kiểm tra Rules!");
+            });
+        }
+
+        // --- HÀM XÓA BÀI ĐĂNG / VIDEO ---
+        function deletePost(id) {
+            if (confirm("Bạn có chắc chắn muốn xóa bài đăng/video này không?")) {
+                db.collection("posts").doc(id).delete().then(() => {
+                    alert("Đã xóa thành công!");
+                }).catch(error => {
+                    console.error("Lỗi khi xóa: ", error);
+                    alert("Xóa thất bại!");
+                });
+            }
+        }
+
+        function renderFeed(items) {
+            const container = document.getElementById('mediaFeedList');
+            container.innerHTML = '';
+
+            if (items.length === 0) {
+                container.innerHTML = `<div class="text-center py-10 text-gray-500 text-xs">Chưa có bài đăng nào. Hãy bấm nút (+) để đăng bài!</div>`;
+                return;
+            }
+
+            items.forEach((item, index) => {
+                const card = document.createElement('div');
+                card.className = 'bg-white dark:bg-yt-darkCard rounded-xl overflow-hidden shadow-sm border border-gray-200 dark:border-gray-800';
+
+                let playerHTML = '';
+                if (item.type === 'youtube') {
+                    playerHTML = `
+                        <div class="relative aspect-video bg-black">
+                            <iframe class="w-full h-full" src="https://www.youtube-nocookie.com/embed/${item.ytId}?autoplay=0&rel=0" 
+                                frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+                        </div>`;
+                } else if (item.type === 'video' || item.type === 'shorts') {
+                    playerHTML = `
+                        <div class="relative aspect-video bg-black">
+                            <video controls class="w-full h-full object-cover"><source src="${item.url}"></video>
+                        </div>`;
+                } else {
+                    playerHTML = `
+                        <div class="p-6 bg-gradient-to-br from-gray-900 to-black text-white flex flex-col items-center justify-center space-y-3">
+                            <div class="w-20 h-20 rounded-full border-2 border-yt-red flex items-center justify-center shadow-lg">
+                                <i class="fa-solid fa-music text-2xl text-yt-red"></i>
+                            </div>
+                            <p class="text-xs text-gray-400">Tệp Âm Nhạc / MP3</p>
+                            <button onclick="playTrack(${index})" class="bg-yt-red text-white px-5 py-1.5 rounded-full text-xs font-bold shadow hover:bg-red-700 flex items-center gap-2">
+                                <i class="fa-solid fa-play"></i> Phát Ngay (NCT)
+                            </button>
+                        </div>`;
+                }
+
+                card.innerHTML = `
+                    ${playerHTML}
+                    <div class="p-3">
+                        <h3 class="font-bold text-sm line-clamp-2">${item.title}</h3>
+                        <div class="flex items-center justify-between mt-2 text-xs text-gray-500 dark:text-gray-400">
+                            <span class="font-medium text-gray-700 dark:text-gray-300"><i class="fa-solid fa-circle-user text-yt-red mr-1"></i>${item.author}</span>
+                            <span>${item.timestamp}</span>
+                        </div>
+                        <div class="flex items-center justify-between mt-3 pt-2 border-t border-gray-100 dark:border-gray-800 text-xs">
+                            <button onclick="likePost('${item.id}', ${item.likes || 0})" class="flex items-center space-x-1 hover:text-yt-red">
+                                <i class="fa-regular fa-thumbs-up"></i>
+                                <span>${item.likes || 0} Thích</span>
+                            </button>
+                            <button onclick="saveOffline(${index})" class="flex items-center space-x-1 hover:text-yt-red">
+                                <i class="fa-solid fa-download"></i>
+                                <span>Tải Offline</span>
+                            </button>
+                            <button onclick="deletePost('${item.id}')" class="text-red-500 hover:text-red-700 flex items-center gap-1 font-semibold">
+                                <i class="fa-solid fa-trash"></i> Xóa
+                            </button>
+                        </div>
+                    </div>`;
+                container.appendChild(card);
+            });
+        }
+
+        function renderShorts(items) {
+            const container = document.getElementById('shortsContainer');
+            container.innerHTML = '';
+            
+            if (items.length === 0) {
+                container.innerHTML = `<div class="text-center py-10 text-gray-500 text-xs">Chưa có video Shorts nào.</div>`;
+                return;
+            }
+
+            items.forEach((item) => {
+                const div = document.createElement('div');
+                div.className = 'shorts-item h-[70vh] bg-black rounded-2xl relative overflow-hidden flex items-center justify-center';
+                if (item.type === 'youtube') {
+                    div.innerHTML = `<iframe class="w-full h-full" src="https://www.youtube-nocookie.com/embed/${item.ytId}?autoplay=0" frameborder="0"></iframe>`;
+                } else {
+                    div.innerHTML = `<video controls class="w-full h-full object-cover"><source src="${item.url}"></video>`;
+                }
+                container.appendChild(div);
+            });
+        }
+
+        function saveOffline(index) {
+            const item = mediaFeed[index];
+            if (!offlineItems.some(o => o.title === item.title)) {
+                offlineItems.push(item);
+                localStorage.setItem('pt_offline', JSON.stringify(offlineItems));
+                alert('Đã tải vào kho Offline!');
+            } else {
+                alert('Bài này đã có trong Offline!');
+            }
+        }
+
+        function renderOffline() {
+            const container = document.getElementById('offlineList');
+            container.innerHTML = '';
+            offlineItems.forEach((item, idx) => {
+                const div = document.createElement('div');
+                div.className = 'p-3 bg-white dark:bg-yt-darkCard rounded-xl border border-gray-200 dark:border-gray-800 flex items-center justify-between';
+                div.innerHTML = `
+                    <div>
+                        <h4 class="text-xs font-bold">${item.title}</h4>
+                        <p class="text-[10px] text-gray-500">${item.author}</p>
+                    </div>
+                    <button onclick="playOfflineTrack(${idx})" class="text-yt-red text-sm font-semibold">Phát</button>
+                `;
+                container.appendChild(div);
+            });
+        }
+
+        function playOfflineTrack(idx) {
+            const item = offlineItems[idx];
+            document.getElementById('playerBar').classList.remove('hidden');
+            document.getElementById('playerTitle').innerText = item.title;
+            document.getElementById('playerAuthor').innerText = item.author;
+            globalAudio.src = item.url;
+            globalAudio.play();
+            updatePlayIcon(true);
+            setupMediaSession(item);
+        }
+
+        function likePost(id, currentLikes) {
+            db.collection("posts").doc(id).update({ likes: currentLikes + 1 });
+        }
+
+        function playTrack(index) {
+            if (index < 0 || index >= mediaFeed.length) return;
+            currentIndex = index;
+            const item = mediaFeed[currentIndex];
+
+            document.getElementById('playerBar').classList.remove('hidden');
+            document.getElementById('playerTitle').innerText = item.title;
+            document.getElementById('playerAuthor').innerText = item.author;
+
+            if (item.type === 'audio' || item.type === 'video' || item.type === 'shorts') {
+                globalAudio.src = item.url;
+                globalAudio.play().catch(e => console.log(e));
+                updatePlayIcon(true);
+            } else if (item.type === 'youtube') {
+                globalAudio.src = 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3';
+                globalAudio.play().catch(e => console.log(e));
+                updatePlayIcon(true);
+            }
+
+            setupMediaSession(item);
+        }
+
+        function setupMediaSession(item) {
+            if ('mediaSession' in navigator) {
+                navigator.mediaSession.metadata = new MediaMetadata({
+                    title: item.title || 'PureTube PRO',
+                    artist: item.author || 'Unknown',
+                    album: 'PureTube PRO Audio',
+                    artwork: [{ src: 'https://via.placeholder.com/512', sizes: '512x512', type: 'image/png' }]
+                });
+
+                navigator.mediaSession.setActionHandler('play', function() {
+                    globalAudio.play();
+                    updatePlayIcon(true);
+                });
+                navigator.mediaSession.setActionHandler('pause', function() {
+                    globalAudio.pause();
+                    updatePlayIcon(false);
+                });
+                navigator.mediaSession.setActionHandler('previoustrack', playPrevTrack);
+                navigator.mediaSession.setActionHandler('nexttrack', playNextTrack);
+            }
+        }
+
+        function playPrevTrack() {
+            if (currentIndex > 0) playTrack(currentIndex - 1);
+            else playTrack(mediaFeed.length - 1);
+        }
+
+        function playNextTrack() {
+            if (currentIndex < mediaFeed.length - 1) playTrack(currentIndex + 1);
+            else playTrack(0);
+        }
+
+        function togglePlayPause() {
+            if (globalAudio.paused) {
+                globalAudio.play();
+                updatePlayIcon(true);
+            } else {
+                globalAudio.pause();
+                updatePlayIcon(false);
+            }
+        }
+
+        function updatePlayIcon(isPlaying) {
+            const icon = document.getElementById('playPauseIcon');
+            const disc = document.getElementById('playerDisc');
+            if (isPlaying) {
+                icon.className = 'fa-solid fa-pause';
+                disc.classList.remove('paused-disc');
+            } else {
+                icon.className = 'fa-solid fa-play';
+                disc.classList.add('paused-disc');
+            }
+        }
+
+        function closePlayer() {
+            globalAudio.pause();
+            document.getElementById('playerBar').classList.add('hidden');
+        }
+    </script>
+</body>
+</html>
